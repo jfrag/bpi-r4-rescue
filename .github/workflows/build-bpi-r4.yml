@@ -79,7 +79,8 @@ jobs:
           sudo apt-get install -y \
             build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
             gettext libncurses-dev libssl-dev python3-distutils python3-setuptools \
-            rsync swig unzip zlib1g-dev file wget libelf-dev ccache git
+            rsync swig unzip zlib1g-dev file wget libelf-dev ccache git \
+            xxd python3-pyelftools device-tree-compiler quilt xsltproc
 
       - name: Run builder script
         run: |
