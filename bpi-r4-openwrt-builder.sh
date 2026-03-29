@@ -26,6 +26,8 @@ echo "CONFIG_BLK_DEV_NVME=y" >> target/linux/mediatek/filogic/config-6.12
 \cp -r ../my_files/luci-app-modemdata-main/luci-app-modemdata/ feeds/luci/applications
 \cp -r ../my_files/luci-app-lite-watchdog/ feeds/luci/applications
 \cp -r ../my_files/luci-app-sms-tool-js-main/luci-app-sms-tool-js/ feeds/luci/applications
+\cp -r ../my_files/luci-app-argon-config feeds/luci/applications
+\cp -r ../my_files/luci-theme-argon feeds/luci/applications
 
 ./scripts/feeds update -a
 ./scripts/feeds install -a
