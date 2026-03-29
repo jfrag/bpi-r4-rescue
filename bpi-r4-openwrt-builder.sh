@@ -4,8 +4,9 @@ set -euo pipefail
 rm -rf openwrt
 rm -rf mtk-openwrt-feeds
 
-git clone --branch openwrt-25.12 https://github.com/openwrt/openwrt.git openwrt
-cd openwrt; git checkout f505120278fdb752586853f4df7482150d0add3b; cd -;  #ipq40xx: fix art partition name WHW03 V1
+#git clone --branch openwrt-25.12 https://github.com/openwrt/openwrt.git openwrt
+#cd openwrt; git checkout f505120278fdb752586853f4df7482150d0add3b; cd -;  #ipq40xx: fix art partition name WHW03 V1
+git clone --depth=1 --branch v25.12.2 https://github.com/openwrt/openwrt.git openwrt
 
 git clone --branch master https://git01.mediatek.com/openwrt/feeds/mtk-openwrt-feeds
 cd mtk-openwrt-feeds; git checkout 07ef2962013b19a4a1e9f8c34a21c1e90be691ce; cd -;  #[MAC80211][WiFi6/7/8][app][Fix iwpriv/ated script]
