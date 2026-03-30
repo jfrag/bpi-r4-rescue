@@ -1,0 +1,63 @@
+#!/bin/sh
+# uci-defaults script - runs once on first boot, then auto-deleted if exit 0
+# Creates a LXC storage partition using all remaining eMMC space
+
+EMMC="/dev/mmcblk0"
+PART="${EMMC}p6"
+MOUNT="/srv/lxc"
+
+# Already done - partition exists, nothing to do
+[ -b "$PART" ] && exit 0
+
+# Sanity check - make sure eMMC is present
+[ -b "$EMMC" ] || {
+    logger -t emmc-lxc "ERROR: $EMMC not found, aborting"
+    exit 1
+}
+
+# Log available eMMC space before partitioning
+TOTAL=$(sgdisk -p "$EMMC" 2>/dev/null | grep "Disk" | awk '{print $3, $4}')
+logger -t emmc-lxc "eMMC detected: $TOTAL"
+
+# Step 1 - Fix misplaced backup GPT (image size < actual eMMC size)
+sgdisk -e "$EMMC" || {
+    logger -t emmc-lxc "ERROR: sgdisk -e failed"
+    exit 1
+}
+
+# Step 2 - Create p6 using ALL remaining space (0:0 = auto start, auto end)
+sgdisk -n 6:0:0 -t 6:8300 -c 6:lxc "$EMMC" || {
+    logger -t emmc-lxc "ERROR: partition creation failed"
+    exit 1
+}
+
+# Step 3 - Notify kernel of new partition table
+partprobe "$EMMC" 2>/dev/null || true
+sleep 2
+
+# Make sure the partition is now visible to the kernel
+[ -b "$PART" ] || {
+    logger -t emmc-lxc "ERROR: $PART not visible after partprobe"
+    exit 1
+}
+
+# Log partition size
+SIZE=$(sgdisk -p "$EMMC" 2>/dev/null | grep "^   6" | awk '{print $4, $5}')
+logger -t emmc-lxc "LXC partition created: $SIZE"
+
+# Step 4 - Format as ext4
+mkfs.ext4 -L lxc "$PART" || {
+    logger -t emmc-lxc "ERROR: mkfs.ext4 failed"
+    exit 1
+}
+
+# Step 5 - Create mount point and add to fstab
+mkdir -p "$MOUNT"
+echo "LABEL=lxc  $MOUNT  ext4  defaults,noatime  0  2" >> /etc/fstab
+
+# Step 6 - Configure LXC to use this partition as container storage
+mkdir -p /etc/lxc
+echo "lxc.lxcpath = $MOUNT" > /etc/lxc/lxc.conf
+
+logger -t emmc-lxc "OK: LXC partition ready ($SIZE) mounted at $MOUNT"
+exit 0
