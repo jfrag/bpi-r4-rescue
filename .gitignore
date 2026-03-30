@@ -4,3 +4,6 @@
 # Editor backups / temp
 *~
 *.swp
+
+mtk-openwrt-feeds
+openwrt
