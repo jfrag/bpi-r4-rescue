@@ -1,63 +1,92 @@
 #!/bin/sh
-# uci-defaults script - runs once on first boot, then auto-deleted if exit 0
-# Creates a LXC storage partition using all remaining eMMC space
+# =============================================================
+#  99-emmc-lxc — Crée ou restaure la partition LXC sur l'eMMC
+#  Exécuté une seule fois au premier boot (uci-defaults)
+#  Se supprime automatiquement si exit 0
+# =============================================================
 
 EMMC="/dev/mmcblk0"
 PART="${EMMC}p6"
 MOUNT="/srv/lxc"
+LABEL="lxc"
 
-# Already done - partition exists, nothing to do
-[ -b "$PART" ] && exit 0
+logger -t emmc-lxc "Starting LXC partition setup..."
 
-# Sanity check - make sure eMMC is present
+# Sanity check — eMMC présent ?
 [ -b "$EMMC" ] || {
     logger -t emmc-lxc "ERROR: $EMMC not found, aborting"
     exit 1
 }
 
-# Log available eMMC space before partitioning
-TOTAL=$(sgdisk -p "$EMMC" 2>/dev/null | grep "Disk" | awk '{print $3, $4}')
-logger -t emmc-lxc "eMMC detected: $TOTAL"
-
-# Step 1 - Fix misplaced backup GPT (image size < actual eMMC size)
-sgdisk -e "$EMMC" || {
+# Étape 1 — Réparer la GPT (le backup GPT est à la fin de l'image,
+# pas à la fin de l'eMMC physique après un dd)
+logger -t emmc-lxc "Fixing GPT backup header..."
+sgdisk -e "$EMMC" 2>/dev/null || {
     logger -t emmc-lxc "ERROR: sgdisk -e failed"
     exit 1
 }
 
-# Step 2 - Create p6 using ALL remaining space (0:0 = auto start, auto end)
-sgdisk -n 6:0:0 -t 6:8300 -c 6:lxc "$EMMC" || {
-    logger -t emmc-lxc "ERROR: partition creation failed"
-    exit 1
-}
+# Étape 2 — Vérifier si p6 existe déjà dans la table GPT
+if sgdisk -p "$EMMC" 2>/dev/null | grep -q "^   6"; then
+    logger -t emmc-lxc "Partition p6 already exists in GPT"
+else
+    # Créer p6 avec tout l'espace restant
+    logger -t emmc-lxc "Creating partition p6..."
+    sgdisk -n 6:0:0 -t 6:8300 -c 6:lxc "$EMMC" || {
+        logger -t emmc-lxc "ERROR: partition creation failed"
+        exit 1
+    }
+    # Notifier le kernel
+    partprobe "$EMMC" 2>/dev/null || true
+    sleep 2
+fi
 
-# Step 3 - Notify kernel of new partition table
-partprobe "$EMMC" 2>/dev/null || true
-sleep 2
-
-# Make sure the partition is now visible to the kernel
+# Vérifier que le kernel voit bien p6
 [ -b "$PART" ] || {
     logger -t emmc-lxc "ERROR: $PART not visible after partprobe"
     exit 1
 }
 
-# Log partition size
-SIZE=$(sgdisk -p "$EMMC" 2>/dev/null | grep "^   6" | awk '{print $4, $5}')
-logger -t emmc-lxc "LXC partition created: $SIZE"
+# Étape 3 — Vérifier si p6 est déjà formatée en ext4
+# CRITIQUE : ne jamais reformater si des données existent déjà !
+if blkid "$PART" 2>/dev/null | grep -q 'TYPE="ext4"'; then
+    logger -t emmc-lxc "p6 already formatted as ext4 — skipping mkfs (data preserved)"
+else
+    logger -t emmc-lxc "Formatting p6 as ext4..."
+    mkfs.ext4 -L "$LABEL" "$PART" || {
+        logger -t emmc-lxc "ERROR: mkfs.ext4 failed"
+        exit 1
+    }
+    logger -t emmc-lxc "p6 formatted successfully"
+fi
 
-# Step 4 - Format as ext4
-mkfs.ext4 -L lxc "$PART" || {
-    logger -t emmc-lxc "ERROR: mkfs.ext4 failed"
-    exit 1
-}
-
-# Step 5 - Create mount point and add to fstab
+# Étape 4 — Point de montage
 mkdir -p "$MOUNT"
-echo "LABEL=lxc  $MOUNT  ext4  defaults,noatime  0  2" >> /etc/fstab
 
-# Step 6 - Configure LXC to use this partition as container storage
+# Étape 5 — Ajouter dans fstab si pas déjà présent
+if ! grep -q "$MOUNT" /etc/fstab 2>/dev/null; then
+    echo "LABEL=$LABEL  $MOUNT  ext4  defaults,noatime  0  2" >> /etc/fstab
+    logger -t emmc-lxc "Added $MOUNT to fstab"
+fi
+
+# Étape 6 — Monter si pas déjà monté
+if ! mountpoint -q "$MOUNT"; then
+    mount "$PART" "$MOUNT" || {
+        logger -t emmc-lxc "ERROR: mount failed"
+        exit 1
+    }
+fi
+
+# Étape 7 — Configurer LXC
 mkdir -p /etc/lxc
-echo "lxc.lxcpath = $MOUNT" > /etc/lxc/lxc.conf
+if ! grep -q "lxc.lxcpath" /etc/lxc/lxc.conf 2>/dev/null; then
+    echo "lxc.lxcpath = $MOUNT" > /etc/lxc/lxc.conf
+    logger -t emmc-lxc "LXC configured to use $MOUNT"
+fi
 
-logger -t emmc-lxc "OK: LXC partition ready ($SIZE) mounted at $MOUNT"
+# Rapport final
+SIZE=$(df -h "$MOUNT" 2>/dev/null | tail -1 | awk '{print $2}')
+USED=$(df -h "$MOUNT" 2>/dev/null | tail -1 | awk '{print $3}')
+logger -t emmc-lxc "OK: LXC partition ready — size=$SIZE used=$USED mounted at $MOUNT"
+
 exit 0

@@ -41,6 +41,13 @@ chmod -R 755 feeds/packages/utils/modemdata/files/usr/share
 
 \cp -r ../configs/my_final_defconfig .config
 [ -d ../my_files/openwrt-files ] && \cp -r ../my_files/openwrt-files ./files
+
+# Fix CRITIQUE : permissions correctes sur les dossiers ET le script
+chmod 755 files/
+chmod 755 files/etc/
+chmod 755 files/etc/uci-defaults/
+chmod 755 files/etc/uci-defaults/*
+
 make defconfig
 
 bash ../mtk-openwrt-feeds/autobuild/unified/autobuild.sh filogic-mac80211-mt798x_rfb-wifi7_nic build
