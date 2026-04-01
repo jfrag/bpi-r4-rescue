@@ -9,7 +9,13 @@ rm -rf mtk-openwrt-feeds
 git clone --depth=1 --branch v25.12.2 https://github.com/openwrt/openwrt.git openwrt
 
 git clone --branch master https://git01.mediatek.com/openwrt/feeds/mtk-openwrt-feeds
-cd mtk-openwrt-feeds; git checkout 07ef2962013b19a4a1e9f8c34a21c1e90be691ce; cd -;  #[MAC80211][WiFi6/7/8][app][Fix iwpriv/ated script]
+cd mtk-openwrt-feeds
+git checkout 07ef2962013b19a4a1e9f8c34a21c1e90be691ce #[MAC80211][WiFi6/7/8][app][Fix iwpriv/ated script]
+git cherry-pick eec42773  # HIGH - hang SFP 1G/2.5G
+git cherry-pick 52345e9b  # HIGH - hang SFP 5G/10G
+git cherry-pick a1d37ffd  # PHY 10G driver 1.9.2
+git cherry-pick f449eefb  # WiFi7 MP4.3 patches openwrt-25
+cd -
 
 \cp -r my_files/999-sfp-10-additional-quirks.patch mtk-openwrt-feeds/25.12/files/target/linux/mediatek/patches-6.12
 \cp -r my_files/100-wifi-mt76-mt7996-Use-tx_power-from-default-fw-if-EEP.patch mtk-openwrt-feeds/autobuild/unified/filogic/mac80211/25.12/files/package/kernel/mt76/patches
